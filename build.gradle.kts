@@ -9,10 +9,9 @@ plugins {
     java
     id("com.github.ben-manes.versions") version "0.36.0"
     id("se.patrikerdes.use-latest-versions") version "0.2.15"
-    id("com.simonharrer.modernizer") version "2.1.0-1" apply false
 }
 
-project.extra["GithubUrl"] = "https://github.com/Sundar-Gandu/Pajeet-Plugins"
+project.extra["GithubUrl"] = "https://github.com/carr91/ChrisssyPlugs"
 
 apply<BootstrapPlugin>()
 apply<VersionPlugin>()
@@ -27,8 +26,8 @@ subprojects {
     var subprojectName = name
     group = "com.openosrs.externals"
 
-    project.extra["PluginProvider"] = "Sundar"
-    project.extra["ProjectUrl"] = "https://github.com/Sundar-Gandu/Pajeet-Plugins"
+    project.extra["PluginProvider"] = "Chrisssy (Project Structure forked from Sundar @ Pajeet)"
+    project.extra["ProjectUrl"] = "https://github.com/carr91/ChrisssyPlugs"
     project.extra["PluginLicense"] = "3-Clause BSD License"
 
     repositories {
@@ -66,7 +65,6 @@ subprojects {
     apply(plugin = "checkstyle")
     apply(plugin = "com.github.ben-manes.versions")
     apply(plugin = "se.patrikerdes.use-latest-versions")
-    apply(plugin = "com.simonharrer.modernizer")
 
     dependencies {
         annotationProcessor(group = "org.projectlombok", name = "lombok", version = "1.18.16")

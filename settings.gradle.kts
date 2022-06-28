@@ -23,22 +23,10 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-rootProject.name = "Sundar External Plugins"
+rootProject.name = "Chrisssy Plugins"
 
-include(":catfacts")
-include(":disablefakeclaw")
-include(":extendedchat")
-include(":oneclick2tick")
-include(":oneclick3tfish")
-include(":oneclickagility")
-include(":oneclickalch")
-include(":oneclickdaeyalt")
-include(":oneclickdropper")
-include(":oneclickrunenable")
-include(":oneclickthieving")
-include(":reflection")
-include(":soundfilter")
-include(":tradewindow")
+include(":catfactsssss")
+include(":CCWinterDaddy")
 
 
 for (project in rootProject.children) {

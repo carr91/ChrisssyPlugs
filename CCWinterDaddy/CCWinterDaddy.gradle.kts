@@ -23,7 +23,29 @@
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-object ProjectVersions {
-    const val openosrsVersion = "4.31.2"
-    const val apiVersion = "^1.0.0"
+
+version = "4.3.3"
+
+project.extra["PluginName"] = "CCWinterDaddy Plugin"
+project.extra["PluginDescription"] = "CCWinterDaddy Plugin"
+
+dependencies {
+    compileOnly(group = "com.openosrs.externals", name = "iutils", version = "5.0.3")
+}
+
+tasks {
+    jar {
+        manifest {
+            attributes(mapOf(
+                    "Plugin-Version" to project.version,
+                    "Plugin-Id" to nameToId(project.extra["PluginName"] as String),
+                    "Plugin-Provider" to project.extra["PluginProvider"],
+                    "Plugin-Dependencies" to
+                            arrayOf(
+                                    nameToId("iUtils")).joinToString(),
+                    "Plugin-Description" to project.extra["PluginDescription"],
+                    "Plugin-License" to project.extra["PluginLicense"]
+            ))
+        }
+    }
 }
