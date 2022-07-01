@@ -27,8 +27,8 @@
 version = "4.3.3"
 
 project.extra["PluginName"] = "CCWinterDaddy Plugin"
-project.extra["PluginDescription"] = "CCWinterDaddy Plugin"
-
+project.extra["PluginDescription"] = "trains WC, FM, and claims runes in lumbridge"
+project.extra["ProjectSupportUrl"] = "https://github.com/carr91/ChrisssyPlugs"
 dependencies {
     compileOnly(group = "com.openosrs.externals", name = "iutils", version = "5.0.3")
 }
