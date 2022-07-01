@@ -52,17 +52,9 @@ class CCWinterDaddyOverlay extends OverlayPanel {
         timeFormat = (duration.toHours() < 1) ? "mm:ss" : "HH:mm:ss";
         tableComponent.addRow("Time running:", formatDuration(duration.toMillis(), timeFormat));
         if (plugin.state != null) {
-            if (!plugin.state.name().equals("TIMEOUT")) {
-                infoStatus = plugin.state.name();
-            }
+            infoStatus = plugin.state.name();
         }
         tableComponent.addRow("Status:", infoStatus);
-
-
-        TableComponent tableMarksComponent = new TableComponent();
-        tableMarksComponent.setColumnAlignments(TableAlignment.LEFT, TableAlignment.RIGHT);
-        tableMarksComponent.addRow("NPCs killed:", String.valueOf(plugin.killCount));
-
         TableComponent tableDelayComponent = new TableComponent();
         tableDelayComponent.setColumnAlignments(TableAlignment.LEFT, TableAlignment.RIGHT);
 
@@ -82,7 +74,6 @@ class CCWinterDaddyOverlay extends OverlayPanel {
                     .text("Stats")
                     .color(ColorUtil.fromHex("#FFA000"))
                     .build());
-            panelComponent.getChildren().add(tableMarksComponent);
             panelComponent.getChildren().add(TitleComponent.builder()
                     .text("Delays")
                     .color(ColorUtil.fromHex("#F8BBD0"))

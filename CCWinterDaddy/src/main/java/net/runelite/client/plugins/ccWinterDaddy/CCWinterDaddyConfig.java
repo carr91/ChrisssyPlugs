@@ -206,7 +206,8 @@ public interface CCWinterDaddyConfig extends Config {
             title = "instructionsTitle"
     )
     default String instruction() {
-        return "Auto fights NPC's with the provided name. Enable Quick Eater Plugin for eating.";
+        return "Autotrains the first 50ish levels of firemaking and woodcutting" +
+                " in Lumbridge. While also claiming runes from the tutor. ensure you have an axe, a tinderbox, mind and air runes.";
     }
     @ConfigItem(
             keyName = "enableUI",

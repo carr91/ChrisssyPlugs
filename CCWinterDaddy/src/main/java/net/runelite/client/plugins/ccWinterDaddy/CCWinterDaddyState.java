@@ -18,5 +18,5 @@ public enum CCWinterDaddyState {
     SCATTER_ASHES,
     SLAYER_COMPLETED,
     TIMEOUT,
-    WAIT_COMBAT;
+    WAIT_COMBAT, ANIMATING;
 }

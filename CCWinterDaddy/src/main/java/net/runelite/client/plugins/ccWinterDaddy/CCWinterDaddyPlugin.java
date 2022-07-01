@@ -31,6 +31,9 @@ import net.runelite.api.*;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.*;
+import net.runelite.api.widgets.WidgetInfo;
+import net.runelite.api.widgets.WidgetItem;
+import net.runelite.api.widgets.Widget;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.plugins.Plugin;
@@ -38,19 +41,32 @@ import net.runelite.client.plugins.PluginDependency;
 import net.runelite.client.plugins.PluginDescriptor;
 import net.runelite.client.plugins.iutils.*;
 import net.runelite.client.plugins.iutils.game.Game;
+import net.runelite.client.plugins.iutils.game.iGroundItem;
 import net.runelite.client.plugins.iutils.scripts.ReflectBreakHandler;
 import net.runelite.client.plugins.iutils.iUtils;
-import net.runelite.client.plugins.iutils.scripts.iScript;
+import net.runelite.client.plugins.iutils.scripts.UtilsScript;
 import net.runelite.client.plugins.iutils.util.LegacyInventoryAssistant;
 import net.runelite.client.ui.overlay.OverlayManager;
 import org.apache.commons.lang3.StringUtils;
 import org.pf4j.Extension;
+///iUtils
+import net.runelite.client.plugins.iutils.*;
+import net.runelite.client.plugins.iutils.ActionQueue;
+import net.runelite.client.plugins.iutils.BankUtils;
+import net.runelite.client.plugins.iutils.InventoryUtils;
+import net.runelite.client.plugins.iutils.CalculationUtils;
+import net.runelite.client.plugins.iutils.MenuUtils;
+import net.runelite.client.plugins.iutils.MouseUtils;
+import net.runelite.client.plugins.iutils.ObjectUtils;
+import net.runelite.client.plugins.iutils.PlayerUtils;
 
 import javax.inject.Inject;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 
+import static net.runelite.api.MenuAction.WIDGET_TARGET_ON_WIDGET;
 import static net.runelite.client.plugins.iutils.iUtils.iterating;
 import static net.runelite.client.plugins.iutils.iUtils.sleep;
 
@@ -125,6 +141,7 @@ public class CCWinterDaddyPlugin extends Plugin {
     List<String> lootableItems = new ArrayList<>();
     List<Item> alchLoot = new ArrayList<>();
     Instant botTimer;
+    Instant claimTimer;
     Instant newLoot;
     LegacyMenuEntry targetMenu;
     Player player;
@@ -139,7 +156,14 @@ public class CCWinterDaddyPlugin extends Plugin {
     int tickLength;
     int timeout;
     int killCount;
+    boolean logsToBurn = false;
+    boolean Burning = false;
+    boolean Chopping = false;
 
+    WorldPoint tutor = new WorldPoint(3225, 3237, 0);
+
+    Tile runeDropTile = null;
+    boolean claimed = false;
     @Provides
     CCWinterDaddyConfig provideConfig(ConfigManager configManager) {
         return configManager.getConfig(CCWinterDaddyConfig.class);
@@ -163,6 +187,7 @@ public class CCWinterDaddyPlugin extends Plugin {
         chinBreakHandler.stopPlugin(this);
         startBot = false;
         botTimer = null;
+        claimTimer = null;
         newLoot = null;
         lootTimer = null;
         loot.clear();
@@ -184,6 +209,7 @@ public class CCWinterDaddyPlugin extends Plugin {
         timeout = 0;
         state = null;
         botTimer = Instant.now();
+        claimTimer = Instant.now();
         overlayManager.add(overlay);
         updateConfigValues();
         beforeLoc = client.getLocalPlayer().getLocalLocation();
@@ -233,9 +259,17 @@ public class CCWinterDaddyPlugin extends Plugin {
 
 
     private CCWinterDaddyState getState() {
+
         if (timeout > 0) {
             playerUtils.handleRun(20, 20);
             return CCWinterDaddyState.TIMEOUT;
+        }
+        if(player.getAnimation()!=-1){
+            timeout=tickDelay();
+            return CCWinterDaddyState.ANIMATING;
+        }
+        if (chinBreakHandler.shouldBreak(this)) {
+            return CCWinterDaddyState.HANDLE_BREAK;
         }
         if (iterating) {
             return CCWinterDaddyState.ITERATING;
@@ -243,9 +277,19 @@ public class CCWinterDaddyPlugin extends Plugin {
         if (playerUtils.isMoving(beforeLoc)) {
             return CCWinterDaddyState.MOVING;
         }
-        return CCWinterDaddyState.CLAIM_RUNES;
-    }
 
+        Duration timeSinceClaim = Duration.between(claimTimer, Instant.now());
+        if (timeSinceClaim.toMinutes()>30){
+            return CCWinterDaddyState.CLAIM_RUNES;
+        }
+        if (!inventory.isFull() && !Burning) {
+            return CCWinterDaddyState.CHOP_TREE;
+        }
+        if (logsToBurn) {
+            return  CCWinterDaddyState.BURN_LOGS;
+        }
+        return CCWinterDaddyState.TIMEOUT;
+    }
     @Subscribe
     private void onGameTick(GameTick event) {
         if (!startBot || chinBreakHandler.isBreakActive(this)) {
@@ -259,10 +303,11 @@ public class CCWinterDaddyPlugin extends Plugin {
                 return;
             }
             state = getState();
-            log.info(String.valueOf(timeout));
             switch (state) {
                 case TIMEOUT:
                     timeout--;
+                    break;
+                case ANIMATING:
                     break;
                 case ITERATING:
                     break;
@@ -275,79 +320,178 @@ public class CCWinterDaddyPlugin extends Plugin {
                 case CHOP_TREE:
                     chop_tree();
                     break;
+                case HANDLE_BREAK:
+                    chinBreakHandler.startBreak(this);
+                    timeout = 10;
+                    break;
                 case WAIT_COMBAT: {
                     new TimeoutUntil(
                             () -> playerUtils.isAnimating(),
                             () -> playerUtils.isMoving(),
                             3);
+                    break;
                 }
-                break;
-                case IN_COMBAT:
-                    timeout = tickDelay();
-                    break;
-                case HANDLE_BREAK:
-                    chinBreakHandler.startBreak(this);
-                    timeout = 10;
-                    break;
-                case LOG_OUT:
-                    if (player.getInteracting() == null) {
-                        interfaceUtils.logout();
-                    } else {
-                        timeout = 5;
-                    }
-                    shutDown();
-                    break;
             }
             beforeLoc = player.getLocalLocation();
         }
     }
 
     private void claim_runes(){
-        log.info("testing moving");
-        WorldPoint tutor = new WorldPoint(3216,3238,0);
-        walk.sceneWalk(tutor, 3, sleepDelay());
 
-        if (tutor.distanceTo(player.getWorldLocation()) > (1)) {
-            new TimeoutUntil(
-                    () -> tutor.distanceTo(player.getWorldLocation()) > (1),
-                    () -> playerUtils.isMoving(),
-                    3);
+        if (!claimed) {
+            if (tutor.distanceTo(player.getWorldLocation()) > (1)) {
+                walk.sceneWalk(tutor, 0, sleepDelay());
+                new TimeoutUntil(
+                        () -> tutor.distanceTo(player.getWorldLocation()) > (1),
+                        () -> playerUtils.isMoving(),
+                        5);
+                return;
+            }
+            List<TileItem> loot = new ArrayList<>();
+
+            if (inventory.containsItem(ItemID.AIR_RUNE) || inventory.containsItem(ItemID.MIND_RUNE)) {
+
+                runeDropTile = WPtoTile(client.getLocalPlayer().getWorldLocation());
+                Set<Integer> dropRunes = Set.of(ItemID.MIND_RUNE, ItemID.AIR_RUNE);
+                inventory.dropItems(dropRunes, false, config.sleepMin(), config.sleepMax());
+                return;
+            }
+        }
+        if (!claimed) {
+            game.npcs().withName("Magic combat tutor").withAction("Claim").nearest().interact("Claim");
+            claimed = true;
             return;
         }
-        List<TileItem> loot = new ArrayList<>();
-        LocalPoint ploc = player.getLocalLocation();
-        if (inventory.containsItem(ItemID.AIR_RUNE) || inventory.containsItem(ItemID.MIND_RUNE)){
-            Set<Integer> dropRunes = Set.of(ItemID.AIR_RUNE,ItemID.MIND_RUNE);
-            inventory.dropItems(dropRunes,false, config.sleepMin(), config.sleepMax());
-        }
-
-        //TALK TO TUTOR IN HERE
-
-        lootAir();
-        lootMind();
-    }
-
-
-    private void lootAir() {
-            TileItem air = object.getGroundItem(ItemID.AIR_RUNE);
-        if (air != null) {
-            lootItem(air);
+        if (claimed){
+            List<TileItem> I = runeDropTile.getGroundItems();
+            if (I != null) {
+                TileItem lootItem = getNearestTileItem(I);
+                targetMenu = new LegacyMenuEntry("", "", lootItem.getId(), MenuAction.GROUND_ITEM_THIRD_OPTION.getId(),
+                        lootItem.getTile().getSceneLocation().getX(), lootItem.getTile().getSceneLocation().getY(), false);
+                menu.setEntry(targetMenu);
+                mouse.delayMouseClick(lootItem.getTile().getItemLayer().getCanvasTilePoly().getBounds(), sleepDelay());
+            } else {
+                claimTimer = Instant.now();
+                claimed = false;
+            }
         }
     }
-    private void lootMind() {
-        TileItem mind = object.getGroundItem(ItemID.MIND_RUNE);
-        if (mind != null) {
-            lootItem(mind);
+    public Tile WPtoTile(WorldPoint worldPoint) {
+        LocalPoint sourceLp = LocalPoint.fromWorld(client, worldPoint.getX(), worldPoint.getY());
+        if (sourceLp == null) {
+            return null;
         }
+
+        int plane = worldPoint.getPlane();
+        int thisX = sourceLp.getSceneX();
+        int thisY = sourceLp.getSceneY();
+
+        Tile[][][] tiles = client.getScene().getTiles();
+        return tiles[plane][thisX][thisY];
     }
-    private void lootItem(TileItem itemToLoot) {
-        menu.setEntry(new LegacyMenuEntry("", "", itemToLoot.getId(), MenuAction.GROUND_ITEM_THIRD_OPTION.getId(), itemToLoot.getTile().getSceneLocation().getX(), itemToLoot.getTile().getSceneLocation().getY(), false));
-        mouse.delayMouseClick(itemToLoot.getTile().getItemLayer().getCanvasTilePoly().getBounds(), sleepDelay()+90);
+    private void setSelectedInventoryItem(Widget item) {
+        client.setSelectedSpellWidget(WidgetInfo.INVENTORY.getId());
+        client.setSelectedSpellChildIndex(item.getIndex());
+        client.setSelectedSpellItemId(item.getItemId());
+    }
+    private Widget getInventoryItem(int id) {
+        Widget inventoryWidget = client.getWidget(WidgetInfo.INVENTORY);
+        Widget bankInventoryWidget = client.getWidget(WidgetInfo.BANK_INVENTORY_ITEMS_CONTAINER);
+        if (inventoryWidget!=null && !inventoryWidget.isHidden())
+        {
+            return getWidgetItem(inventoryWidget,id);
+        }
+        if (bankInventoryWidget!=null && !bankInventoryWidget.isHidden())
+        {
+            return getWidgetItem(bankInventoryWidget,id);
+        }
+        return null;
+    }
+    private Widget getWidgetItem(Widget widget,int id) {
+        for (Widget item : widget.getDynamicChildren())
+        {
+            if (item.getItemId() == id)
+            {
+                return item;
+            }
+        }
+        return null;
+    }
+    private Widget burnable() {
+        Widget rawM = getInventoryItem(ItemID.LOGS);
+
+        Widget rawL = getInventoryItem(ItemID.LOGS);
+        Widget rawOL = getInventoryItem(ItemID.OAK_LOGS);
+        Widget rawWL = getInventoryItem(ItemID.WILLOW_LOGS);
+
+        if (rawWL != null) {
+            rawM = rawWL;
+        }
+        if (rawOL != null) {
+            rawM = rawOL;
+        }
+        if (rawL != null) {
+            rawM = rawL;
+        }
+        return rawM;
     }
     private void burn_logs() {
+
+        Widget tool1 = getInventoryItem(590);
+        Widget rawM = burnable();
+        if(tool1 == null|| rawM == null){
+            logsToBurn = false;
+            Burning = false;
+            System.out.println("OutOfLogs");
+            if (tutor.distanceTo(player.getWorldLocation()) > (1)) {
+                walk.sceneWalk(tutor, 0, sleepDelay());
+                new TimeoutUntil(
+                        () -> tutor.distanceTo(player.getWorldLocation()) > (1),
+                        () -> playerUtils.isMoving(),
+                        5);
+                return;
+            }
+            return;
+        }
+
+        if (!Burning){
+            if (tutor.distanceTo(player.getWorldLocation()) > (1)) {
+                walk.sceneWalk(tutor, 0, sleepDelay());
+                new TimeoutUntil(
+                        () -> tutor.distanceTo(player.getWorldLocation()) > (1),
+                        () -> playerUtils.isMoving(),
+                        5);
+                return;
+            }
+            Burning = true;
+        }
+
+        setSelectedInventoryItem(tool1);
+        targetMenu = new LegacyMenuEntry("","",0,WIDGET_TARGET_ON_WIDGET,rawM.getIndex(),9764864,true);
+        utils.doInvokeMsTime(targetMenu,sleepDelay());
+        timeout +=2;
     }
 
     private void chop_tree() {
+        log.info("IM CHOPPING WOOD");
+        Chopping = true;
+        GameObject tree = object.findNearestGameObject(1276, 1277, 1278);
+
+        if (client.getBoostedSkillLevel(Skill.WOODCUTTING) <15){
+            tree = object.findNearestGameObject(1276, 1277, 1278);
+        }
+        else if (client.getBoostedSkillLevel(Skill.WOODCUTTING) <30){
+            log.info("CHOPPING OAKS");
+            tree = object.findNearestGameObject(10820);
+        }
+        else if (client.getBoostedSkillLevel(Skill.WOODCUTTING) <95){
+            log.info("CHOPPING WILLOW");
+            tree = object.findNearestGameObject(10819);
+        }
+
+        utils.doGameObjectActionMsTime(tree, MenuAction.GAME_OBJECT_FIRST_OPTION.getId(), sleepDelay());
+        logsToBurn = true;
+        return;
     }
 
     @Subscribe
@@ -365,11 +509,10 @@ public class CCWinterDaddyPlugin extends Plugin {
 
     @Subscribe
     private void onChatMessage(ChatMessage event) {
-        if (startBot && (event.getType() == ChatMessageType.SPAM || event.getType() == ChatMessageType.GAMEMESSAGE)) {
-            if (event.getMessage().contains("I'm already under attack") && event.getType() == ChatMessageType.SPAM) {
-                log.debug("We already have a target. Waiting to auto-retaliate new target");
-                //! If we are underattack, probably are not in safespot --> prioritize returning to safety
-                return;
+        if (startBot && (event.getType() == ChatMessageType.SPAM || event.getType() == ChatMessageType.GAMEMESSAGE)){
+            if (event.getMessage().contains("can't light")){
+                Burning = false;
+                logsToBurn = true;
             }
         }
     }
